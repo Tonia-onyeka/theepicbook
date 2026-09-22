@@ -14,8 +14,11 @@ app_root: /opt/epicbook
 # Database configuration
 mysql_database: bookstore
 mysql_username: epicbookadmin
-mysql_host: DATABASE_PRIVATE_IP
+mysql_host: epicbook-production-mysql.mysql.database.azure.com
 mysql_port: 3306
+
+# Backend application networking
+backend_private_ip: 10.20.2.4
 
 # Nginx
 nginx_web_root: /var/www/html

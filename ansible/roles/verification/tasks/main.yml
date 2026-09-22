@@ -60,19 +60,18 @@
   when: inventory_hostname in groups['frontend']
 
 - name: Verify EpicBook database sample data
-  ansible.builtin.command:
+  ansible.builtin.shell:
     cmd: >
+      MYSQL_PWD="{{ mysql_password }}"
       mysql
       --host={{ mysql_host }}
       --port={{ mysql_port }}
       --user={{ mysql_username }}
-      --ssl
+      --ssl-mode=REQUIRED
       --database={{ mysql_database }}
       --batch
       --skip-column-names
       --execute="SELECT (SELECT COUNT(*) FROM Author) AS authors, (SELECT COUNT(*) FROM Book) AS books;"
-  environment:
-    MYSQL_PWD: "{{ mysql_password }}"
   register: database_sample_check
   changed_when: false
   no_log: true

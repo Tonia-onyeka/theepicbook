@@ -1,0 +1,35 @@
+---
+- name: Verify EpicBook application directory
+  ansible.builtin.stat:
+    path: "{{ app_root }}"
+  register: epicbook_app_directory
+  when: inventory_hostname in groups['backend']
+
+- name: Verify EpicBook application directory exists
+  ansible.builtin.assert:
+    that:
+      - epicbook_app_directory.stat.exists
+      - epicbook_app_directory.stat.isdir
+    fail_msg: "EpicBook application directory was not found on the backend."
+  when: inventory_hostname in groups['backend']
+
+- name: Verify Nginx service is running
+  ansible.builtin.service_facts:
+  when: inventory_hostname in groups['frontend']
+
+- name: Confirm Nginx is active
+  ansible.builtin.assert:
+    that:
+      - "'nginx.service' in ansible_facts.services"
+      - ansible_facts.services['nginx.service'].state == 'running'
+    fail_msg: "Nginx is not running on the frontend."
+  when: inventory_hostname in groups['frontend']
+
+- name: Verify database variables
+  ansible.builtin.assert:
+    that:
+      - mysql_database is defined
+      - mysql_host is defined
+      - mysql_port is defined
+    fail_msg: "Database configuration is incomplete."
+  when: inventory_hostname in groups['database']

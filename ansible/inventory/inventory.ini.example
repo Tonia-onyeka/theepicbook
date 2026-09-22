@@ -1,0 +1,11 @@
+[frontend]
+frontend ansible_host=FRONTEND_PUBLIC_IP ansible_user=azureuser
+
+[backend]
+backend ansible_host=BACKEND_PRIVATE_IP ansible_user=azureuser
+
+[database]
+database ansible_host=DATABASE_PRIVATE_IP ansible_user=azureuser
+
+[all:vars]
+ansible_ssh_private_key_file=~/.ssh/epicbook-key.pem

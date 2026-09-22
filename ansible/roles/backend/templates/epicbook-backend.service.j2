@@ -1,0 +1,16 @@
+[Unit]
+Description=EpicBook Node.js Backend
+After=network.target
+
+[Service]
+Type=simple
+User={{ app_user }}
+WorkingDirectory={{ app_root }}
+Environment=NODE_ENV={{ app_environment }}
+Environment=PORT={{ backend_port }}
+ExecStart=/usr/bin/npm start
+Restart=always
+RestartSec=5
+
+[Install]
+WantedBy=multi-user.target

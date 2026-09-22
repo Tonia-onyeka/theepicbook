@@ -1,0 +1,25 @@
+---
+# EpicBook application configuration
+app_name: epicbook
+app_environment: production
+
+# Application ports
+frontend_port: 80
+backend_port: 8080
+
+# Application deployment
+app_user: azureuser
+app_root: /opt/epicbook
+
+# Database configuration
+mysql_database: bookstore
+mysql_username: epicbookadmin
+mysql_host: DATABASE_PRIVATE_IP
+mysql_port: 3306
+
+# Nginx
+nginx_web_root: /var/www/html
+
+# Deployment metadata
+deployment_owner: "Anthonia Akwuohia"
+deployment_environment: "production"

@@ -1,0 +1,40 @@
+---
+- name: Deploy EpicBook application
+  hosts: all
+  become: true
+  gather_facts: true
+
+  roles:
+    - common
+
+- name: Configure EpicBook database
+  hosts: database
+  become: true
+  gather_facts: true
+
+  roles:
+    - database
+
+- name: Deploy EpicBook backend
+  hosts: backend
+  become: true
+  gather_facts: true
+
+  roles:
+    - backend
+
+- name: Deploy EpicBook frontend
+  hosts: frontend
+  become: true
+  gather_facts: true
+
+  roles:
+    - frontend
+
+- name: Verify EpicBook deployment
+  hosts: frontend:backend:database
+  become: true
+  gather_facts: true
+
+  roles:
+    - verification

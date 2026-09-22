@@ -1,0 +1,37 @@
+---
+- name: Install Node.js and npm
+  ansible.builtin.apt:
+    name:
+      - nodejs
+      - npm
+    state: present
+
+- name: Create EpicBook application directory
+  ansible.builtin.file:
+    path: "{{ app_root }}"
+    state: directory
+    owner: "{{ app_user }}"
+    group: "{{ app_user }}"
+    mode: "0755"
+
+- name: Ensure backend application port is defined
+  ansible.builtin.assert:
+    that:
+      - backend_port is defined
+      - backend_port | int > 0
+    fail_msg: "The EpicBook backend port is not configured correctly."
+
+- name: Install EpicBook backend systemd service
+  ansible.builtin.template:
+    src: epicbook-backend.service.j2
+    dest: /etc/systemd/system/epicbook-backend.service
+    owner: root
+    group: root
+    mode: "0644"
+  notify: Restart EpicBook backend
+
+- name: Enable EpicBook backend service
+  ansible.builtin.systemd:
+    name: epicbook-backend
+    enabled: true
+    daemon_reload: true

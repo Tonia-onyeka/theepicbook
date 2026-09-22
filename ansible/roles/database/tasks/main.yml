@@ -1,0 +1,13 @@
+---
+- name: Verify database configuration is defined
+  ansible.builtin.assert:
+    that:
+      - mysql_database is defined
+      - mysql_username is defined
+      - mysql_host is defined
+      - mysql_port is defined
+    fail_msg: "Required EpicBook database variables are missing."
+
+- name: Display database connection target
+  ansible.builtin.debug:
+    msg: "EpicBook database target: {{ mysql_host }}:{{ mysql_port }}/{{ mysql_database }}"

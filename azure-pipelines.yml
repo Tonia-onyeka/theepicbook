@@ -1,0 +1,11 @@
+trigger:
+- main
+
+pool:
+  name: SelfHostedPool
+
+steps:
+- script: |
+    echo "EpicBook Application Pipeline connected successfully."
+    echo "Repository: Tonia-onyeka/theepicbook"
+  displayName: "Verify Application Pipeline"

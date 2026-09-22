@@ -6,8 +6,7 @@ After=network.target
 Type=simple
 User={{ app_user }}
 WorkingDirectory={{ app_root }}
-Environment=NODE_ENV={{ app_environment }}
-Environment=PORT={{ backend_port }}
+EnvironmentFile=/etc/epicbook/epicbook.env
 ExecStart=/usr/bin/npm start
 Restart=always
 RestartSec=5

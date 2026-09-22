@@ -5,7 +5,7 @@
   register: epicbook_app_directory
   when: inventory_hostname in groups['backend']
 
-- name: Verify EpicBook application directory exists
+- name: Confirm EpicBook application directory exists
   ansible.builtin.assert:
     that:
       - epicbook_app_directory.stat.exists
@@ -13,7 +13,27 @@
     fail_msg: "EpicBook application directory was not found on the backend."
   when: inventory_hostname in groups['backend']
 
-- name: Verify Nginx service is running
+- name: Verify EpicBook backend service
+  ansible.builtin.service_facts:
+  when: inventory_hostname in groups['backend']
+
+- name: Confirm EpicBook backend service is active
+  ansible.builtin.assert:
+    that:
+      - "'epicbook-backend.service' in ansible_facts.services"
+      - ansible_facts.services['epicbook-backend.service'].state == 'running'
+    fail_msg: "EpicBook backend service is not running."
+  when: inventory_hostname in groups['backend']
+
+- name: Verify EpicBook backend port
+  ansible.builtin.wait_for:
+    host: 127.0.0.1
+    port: "{{ backend_port }}"
+    state: started
+    timeout: 10
+  when: inventory_hostname in groups['backend']
+
+- name: Verify Nginx service
   ansible.builtin.service_facts:
   when: inventory_hostname in groups['frontend']
 
@@ -25,11 +45,43 @@
     fail_msg: "Nginx is not running on the frontend."
   when: inventory_hostname in groups['frontend']
 
-- name: Verify database variables
+- name: Validate Nginx configuration
+  ansible.builtin.command:
+    cmd: nginx -t
+  changed_when: false
+  when: inventory_hostname in groups['frontend']
+
+- name: Verify EpicBook frontend HTTP response
+  ansible.builtin.uri:
+    url: "http://127.0.0.1:{{ frontend_port }}"
+    status_code: 200
+    return_content: false
+  register: frontend_http_check
+  when: inventory_hostname in groups['frontend']
+
+- name: Verify EpicBook database sample data
+  ansible.builtin.command:
+    cmd: >
+      mysql
+      --host={{ mysql_host }}
+      --port={{ mysql_port }}
+      --user={{ mysql_username }}
+      --ssl
+      --database={{ mysql_database }}
+      --batch
+      --skip-column-names
+      --execute="SELECT (SELECT COUNT(*) FROM Author) AS authors, (SELECT COUNT(*) FROM Book) AS books;"
+  environment:
+    MYSQL_PWD: "{{ mysql_password }}"
+  register: database_sample_check
+  changed_when: false
+  no_log: true
+  when: inventory_hostname in groups['backend']
+
+- name: Confirm EpicBook database contains sample data
   ansible.builtin.assert:
     that:
-      - mysql_database is defined
-      - mysql_host is defined
-      - mysql_port is defined
-    fail_msg: "Database configuration is incomplete."
-  when: inventory_hostname in groups['database']
+      - database_sample_check.stdout.split()[0] | int > 0
+      - database_sample_check.stdout.split()[1] | int > 0
+    fail_msg: "EpicBook database tables do not contain sample data."
+  when: inventory_hostname in groups['backend']

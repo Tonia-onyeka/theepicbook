@@ -5,7 +5,7 @@ server {
     server_name _;
 
     location / {
-        proxy_pass http://{{ hostvars[groups['backend'][0]]['ansible_host'] }}:{{ backend_port }};
+        proxy_pass http://{{ backend_private_ip }}:{{ backend_port }};
         proxy_http_version 1.1;
 
         proxy_set_header Host $host;

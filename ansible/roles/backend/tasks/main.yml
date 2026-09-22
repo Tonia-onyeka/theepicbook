@@ -1,9 +1,10 @@
 ---
-- name: Install Node.js and npm
+- name: Install backend packages
   ansible.builtin.apt:
     name:
       - nodejs
       - npm
+      - mysql-client
     state: present
 
 - name: Create EpicBook application directory
@@ -13,6 +14,194 @@
     owner: "{{ app_user }}"
     group: "{{ app_user }}"
     mode: "0755"
+
+- name: Deploy EpicBook application source
+  ansible.builtin.git:
+    repo: "https://github.com/Tonia-onyeka/theepicbook.git"
+    dest: "{{ app_root }}"
+    version: main
+    force: true
+    update: true
+  become_user: "{{ app_user }}"
+  notify: Restart EpicBook backend
+
+- name: Install EpicBook Node.js dependencies
+  ansible.builtin.command:
+    cmd: npm ci
+    chdir: "{{ app_root }}"
+  become_user: "{{ app_user }}"
+  register: npm_ci_result
+  changed_when: "'added' in npm_ci_result.stdout or 'packages' in npm_ci_result.stdout"
+  notify: Restart EpicBook backend
+
+- name: Create EpicBook runtime configuration directory
+  ansible.builtin.file:
+    path: /etc/epicbook
+    state: directory
+    owner: root
+    group: root
+    mode: "0750"
+
+- name: Check whether EpicBook database exists
+  ansible.builtin.command:
+    cmd: >
+      mysql
+      --host={{ mysql_host }}
+      --port={{ mysql_port }}
+      --user={{ mysql_username }}
+      --ssl-mode=REQUIRED
+      --batch
+      --skip-column-names
+      --execute="SELECT SCHEMA_NAME FROM INFORMATION_SCHEMA.SCHEMATA WHERE SCHEMA_NAME='{{ mysql_database }}';"
+  environment:
+    MYSQL_PWD: "{{ mysql_password }}"
+  register: mysql_database_check
+  changed_when: false
+  no_log: true
+
+- name: Create EpicBook database
+  ansible.builtin.command:
+    cmd: >
+      mysql
+      --host={{ mysql_host }}
+      --port={{ mysql_port }}
+      --user={{ mysql_username }}
+      --ssl-mode=REQUIRED
+      --execute="CREATE DATABASE \`{{ mysql_database }}\`;"
+  environment:
+    MYSQL_PWD: "{{ mysql_password }}"
+  when: mysql_database_check.stdout | trim == ""
+  no_log: true
+
+- name: Verify EpicBook database connectivity
+  ansible.builtin.command:
+    cmd: >
+      mysql
+      --host={{ mysql_host }}
+      --port={{ mysql_port }}
+      --user={{ mysql_username }}
+      --ssl-mode=REQUIRED
+      --database={{ mysql_database }}
+      --batch
+      --skip-column-names
+      --execute="SELECT 1;"
+  environment:
+    MYSQL_PWD: "{{ mysql_password }}"
+  register: mysql_connectivity
+  changed_when: false
+  no_log: true
+
+- name: Check whether EpicBook Author table exists
+  ansible.builtin.command:
+    cmd: >
+      mysql
+      --host={{ mysql_host }}
+      --port={{ mysql_port }}
+      --user={{ mysql_username }}
+      --ssl-mode=REQUIRED
+      --database={{ mysql_database }}
+      --batch
+      --skip-column-names
+      --execute="SELECT COUNT(*) FROM information_schema.tables WHERE table_schema='{{ mysql_database }}' AND table_name='Author';"
+  environment:
+    MYSQL_PWD: "{{ mysql_password }}"
+  register: author_table_check
+  changed_when: false
+  no_log: true
+
+- name: Initialize EpicBook database schema
+  ansible.builtin.shell:
+    cmd: >
+      mysql
+      --host={{ mysql_host }}
+      --port={{ mysql_port }}
+      --user={{ mysql_username }}
+      --ssl-mode=REQUIRED
+      --database={{ mysql_database }}
+      < {{ app_root }}/db/BuyTheBook_Schema.sql
+  environment:
+    MYSQL_PWD: "{{ mysql_password }}"
+  when: author_table_check.stdout | trim == "0"
+  no_log: true
+
+- name: Check whether EpicBook authors already exist
+  ansible.builtin.command:
+    cmd: >
+      mysql
+      --host={{ mysql_host }}
+      --port={{ mysql_port }}
+      --user={{ mysql_username }}
+      --ssl-mode=REQUIRED
+      --database={{ mysql_database }}
+      --batch
+      --skip-column-names
+      --execute="SELECT COUNT(*) FROM Author;"
+  environment:
+    MYSQL_PWD: "{{ mysql_password }}"
+  register: author_count
+  changed_when: false
+  no_log: true
+
+- name: Import EpicBook author seed data
+  ansible.builtin.shell:
+    cmd: >
+      mysql
+      --host={{ mysql_host }}
+      --port={{ mysql_port }}
+      --user={{ mysql_username }}
+      --ssl-mode=REQUIRED
+      --database={{ mysql_database }}
+      < {{ app_root }}/db/author_seed.sql
+  environment:
+    MYSQL_PWD: "{{ mysql_password }}"
+  when: author_count.stdout | trim == "0"
+  no_log: true
+
+- name: Check whether EpicBook books already exist
+  ansible.builtin.command:
+    cmd: >
+      mysql
+      --host={{ mysql_host }}
+      --port={{ mysql_port }}
+      --user={{ mysql_username }}
+      --ssl-mode=REQUIRED
+      --database={{ mysql_database }}
+      --batch
+      --skip-column-names
+      --execute="SELECT COUNT(*) FROM Book;"
+  environment:
+    MYSQL_PWD: "{{ mysql_password }}"
+  register: book_count
+  changed_when: false
+  no_log: true
+
+- name: Import EpicBook book seed data
+  ansible.builtin.shell:
+    cmd: >
+      mysql
+      --host={{ mysql_host }}
+      --port={{ mysql_port }}
+      --user={{ mysql_username }}
+      --ssl-mode=REQUIRED
+      --database={{ mysql_database }}
+      < {{ app_root }}/db/books_seed.sql
+  environment:
+    MYSQL_PWD: "{{ mysql_password }}"
+  when: book_count.stdout | trim == "0"
+  no_log: true
+
+- name: Configure EpicBook database environment
+  ansible.builtin.copy:
+    dest: /etc/epicbook/epicbook.env
+    owner: root
+    group: root
+    mode: "0600"
+    content: |
+      NODE_ENV={{ app_environment }}
+      PORT={{ backend_port }}
+      JAWSDB_URL=mysql://{{ mysql_username }}:{{ mysql_password | urlencode }}@{{ mysql_host }}:{{ mysql_port }}/{{ mysql_database }}
+  no_log: true
+  notify: Restart EpicBook backend
 
 - name: Ensure backend application port is defined
   ansible.builtin.assert:

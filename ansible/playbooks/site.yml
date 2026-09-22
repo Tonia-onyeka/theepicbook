@@ -7,14 +7,6 @@
   roles:
     - common
 
-- name: Configure EpicBook database
-  hosts: database
-  become: true
-  gather_facts: true
-
-  roles:
-    - database
-
 - name: Deploy EpicBook backend
   hosts: backend
   become: true
@@ -32,7 +24,7 @@
     - frontend
 
 - name: Verify EpicBook deployment
-  hosts: frontend:backend:database
+  hosts: frontend:backend
   become: true
   gather_facts: true
 

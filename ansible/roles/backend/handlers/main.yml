@@ -3,4 +3,5 @@
   ansible.builtin.systemd:
     name: epicbook-backend
     state: restarted
+    enabled: true
     daemon_reload: true

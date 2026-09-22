@@ -9,6 +9,5 @@
     name:
       - curl
       - git
-      - unzip
       - ca-certificates
     state: present

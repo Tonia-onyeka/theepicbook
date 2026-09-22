@@ -23,6 +23,7 @@ ansible.log
 .vault_pass
 vault-password*
 ansible/inventory/inventory.ini
+ansible/inventory/group_vars/all.yml
 ansible/group_vars/*/secret*
 ansible/group_vars/*/vault*
 ansible/*.log

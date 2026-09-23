@@ -1,0 +1,254 @@
+trigger:
+  branches:
+    include:
+    - main
+  paths:
+    include:
+    - terraform/*
+    - azure-pipelines.yml
+pr:
+  enabled: false
+pool:
+  name: SelfHostedPool
+variables:
+- group: epicbook-production-secrets
+- name: terraformVersion
+  value: "1.16.2"
+- name: azureServiceConnection
+  value: "azure-epicbook-connection"
+- name: terraformDirectory
+  value: "terraform"
+- name: planArtifactName
+  value: "terraform-reviewed-plan"
+- name: secureKeyFile
+  value: "id_ed25519"
+- name: adminSourceCidrs
+  value: '["13.60.47.77/32"]'
+stages:
+- stage: Validate
+  displayName: "Validate Terraform"
+  jobs:
+  - job: ValidateTerraform
+    displayName: "Terraform Format and Validate"
+    steps:
+    - task: 6d15af64-176c-496d-b583-fd2ae21d4df4@1
+      inputs:
+        repository: self
+        clean: true
+    - task: AzureCLI@2
+      displayName: "Initialize and Validate Terraform"
+      inputs:
+        azureSubscription: "$(azureServiceConnection)"
+        addSpnToEnvironment: true
+        scriptType: bash
+        scriptLocation: inlineScript
+        workingDirectory: "$(terraformDirectory)"
+        inlineScript: |
+          set -euo pipefail
+
+          echo "Terraform version:"
+          terraform version
+
+          echo "Initializing Terraform backend..."
+          export ARM_USE_OIDC=true
+          export ARM_USE_AZUREAD=true
+          export ARM_TENANT_ID="$tenantId"
+          export ARM_CLIENT_ID="$servicePrincipalId"
+          export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+
+          terraform init -input=false
+
+          echo "Checking Terraform formatting..."
+          terraform fmt -check -recursive
+
+          echo "Validating Terraform configuration..."
+          terraform validate
+
+          echo "Terraform validation completed successfully."
+- stage: Plan
+  displayName: "Terraform Plan"
+  dependsOn:
+  - Validate
+  condition: succeeded()
+  jobs:
+  - job: PlanTerraform
+    displayName: "Create Reviewed Terraform Plan"
+    steps:
+    - task: 6d15af64-176c-496d-b583-fd2ae21d4df4@1
+      inputs:
+        repository: self
+        clean: true
+    - task: DownloadSecureFile@1
+      name: sshKey
+      displayName: "Download SSH Private Key"
+      inputs:
+        secureFile: "$(secureKeyFile)"
+    - task: AzureCLI@2
+      displayName: "Terraform Init and Plan"
+      inputs:
+        azureSubscription: "$(azureServiceConnection)"
+        addSpnToEnvironment: true
+        scriptType: bash
+        scriptLocation: inlineScript
+        workingDirectory: "$(terraformDirectory)"
+        inlineScript: |
+          set -euo pipefail
+
+          export ARM_USE_OIDC=true
+          export ARM_USE_AZUREAD=true
+          export ARM_TENANT_ID="$tenantId"
+          export ARM_CLIENT_ID="$servicePrincipalId"
+          export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+
+          chmod 600 "$(sshKey.secureFilePath)"
+
+          SSH_PUBLIC_KEY="$(ssh-keygen -y -f "$(sshKey.secureFilePath)")"
+
+          echo "Initializing Terraform..."
+          terraform init -input=false
+
+          echo "Creating Terraform plan..."
+
+          export TF_VAR_project_name="epicbook"
+          export TF_VAR_location="westus2"
+          export TF_VAR_environment="production"
+          export TF_VAR_frontend_vm_size="Standard_B2s_v2"
+          export TF_VAR_backend_vm_size="Standard_B2s_v2"
+          export TF_VAR_admin_username="azureuser"
+          export TF_VAR_ssh_public_key="$SSH_PUBLIC_KEY"
+          export TF_VAR_mysql_admin_username="$MYSQL_ADMIN_USERNAME"
+          export TF_VAR_mysql_admin_\1=[REDACTED]
+          export TF_VAR_mysql_database="bookstore"
+          export TF_VAR_admin_source_cidrs="$ADMIN_SOURCE_CIDRS"
+
+          terraform plan \
+            -input=false \
+            -out=tfplan
+
+          echo "Generating human-readable reviewed plan..."
+          terraform show -no-color tfplan > reviewed-plan.txt
+
+          echo "Terraform plan summary:"
+          tail -n 25 reviewed-plan.txt
+
+          echo "Plan created successfully."
+      env:
+        MYSQL_ADMIN_USERNAME: $(MYSQL_ADMIN_USERNAME)
+        MYSQL_ADMIN_PASSWORD: $(MYSQL_ADMIN_PASSWORD)
+        ADMIN_SOURCE_CIDRS: $(adminSourceCidrs)
+    - task: ecdc45f6-832d-4ad9-b52b-ee49e94659be@1
+      displayName: "Publish Reviewed Terraform Plan"
+      inputs:
+        path: "$(terraformDirectory)/tfplan"
+        artifactName: "$(planArtifactName)"
+    - task: ecdc45f6-832d-4ad9-b52b-ee49e94659be@1
+      displayName: "Publish Plan Review Output"
+      inputs:
+        path: "$(terraformDirectory)/reviewed-plan.txt"
+        artifactName: "terraform-plan-review"
+- stage: Apply
+  displayName: "Terraform Apply"
+  dependsOn:
+  - Plan
+  condition: succeeded()
+  jobs:
+  - job: Approval
+    displayName: "Manual Approval Before Apply"
+    pool:
+      name: server
+    steps:
+    - task: ManualValidation@1
+      timeoutInMinutes: 1440
+      inputs:
+        notifyUsers: ""
+        instructions: |
+          Review the Terraform plan artifact from the Plan stage.
+
+          Approve this validation only after confirming that the
+          planned resources and changes are expected.
+
+          The Apply stage will use the exact saved tfplan artifact.
+        onTimeout: "reject"
+  - job: ApplyTerraform
+    displayName: "Apply Reviewed Terraform Plan"
+    dependsOn:
+    - Approval
+    condition: succeeded()
+    steps:
+    - task: 6d15af64-176c-496d-b583-fd2ae21d4df4@1
+      inputs:
+        repository: self
+        clean: true
+    - task: DownloadSecureFile@1
+      name: sshKey
+      displayName: "Download SSH Private Key"
+      inputs:
+        secureFile: "$(secureKeyFile)"
+    - task: 30f35852-3f7e-4c0c-9a88-e127b4f97211@1
+      displayName: "Download Reviewed Terraform Plan"
+      inputs:
+        alias: current
+        artifact: "$(planArtifactName)"
+    - task: AzureCLI@2
+      displayName: "Apply Reviewed Terraform Plan"
+      inputs:
+        azureSubscription: "$(azureServiceConnection)"
+        addSpnToEnvironment: true
+        scriptType: bash
+        scriptLocation: inlineScript
+        workingDirectory: "$(terraformDirectory)"
+        inlineScript: |
+          set -euo pipefail
+
+          export ARM_USE_OIDC=true
+          export ARM_USE_AZUREAD=true
+          export ARM_TENANT_ID="$tenantId"
+          export ARM_CLIENT_ID="$servicePrincipalId"
+          export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+
+          terraform init -input=false
+
+          PLAN_FILE="$(Pipeline.Workspace)/$(planArtifactName)/tfplan"
+
+          if [ ! -f "$PLAN_FILE" ]; then
+            echo "ERROR: Reviewed Terraform plan artifact was not found."
+            exit 1
+          fi
+
+          echo "Applying the exact reviewed Terraform plan..."
+          terraform apply \
+            -input=false \
+            "$PLAN_FILE"
+
+          echo "Terraform apply completed successfully."
+    - task: AzureCLI@2
+      displayName: "Display Required Terraform Outputs"
+      inputs:
+        azureSubscription: "$(azureServiceConnection)"
+        addSpnToEnvironment: true
+        scriptType: bash
+        scriptLocation: inlineScript
+        workingDirectory: "$(terraformDirectory)"
+        inlineScript: |
+          set -euo pipefail
+
+          export ARM_USE_OIDC=true
+          export ARM_USE_AZUREAD=true
+          export ARM_TENANT_ID="$tenantId"
+          export ARM_CLIENT_ID="$servicePrincipalId"
+          export ARM_SUBSCRIPTION_ID="$(az account show --query id -o tsv)"
+
+          echo "========================================"
+          echo "EpicBook Deployment Outputs"
+          echo "========================================"
+
+          echo "app_public_ip=$(terraform output -raw app_public_ip)"
+          echo "backend_ansible_host=$(terraform output -raw backend_ansible_host)"
+          echo "backend_private_ip=$(terraform output -raw backend_private_ip)"
+          echo "mysql_fqdn=$(terraform output -raw mysql_fqdn)"
+
+          echo "========================================"
+          echo "Required non-sensitive outputs displayed."
+          echo "No Terraform state or database password is published."
+          echo "========================================"
+

@@ -1,0 +1,55 @@
+========================================
+CI/CD Pipeline Failure Triage Report
+========================================
+Full Name: Anthonia Akwuohia
+Timestamp: 2026-09-23T10:16:51Z
+Provider: azure-devops
+
+
+----------------------------------------
+Infrastructure Pipeline
+----------------------------------------
+Pipeline Name: Tonia-onyeka.infra-epicbook (6)
+Pipeline ID: 6
+Run ID: 26
+Branch: refs/heads/main
+Status: completed
+Result: succeeded
+Completion: 2026-09-22T16:58:15.851295+00:00
+[PASS] Infrastructure completed successfully.
+Sanitized console log saved: //wsl.localhost/Ubuntu/home/anthonia/ansible-onboarding/theepicbook/reports/infra-last-run.log
+
+----------------------------------------
+Application Pipeline
+----------------------------------------
+Pipeline Name: Tonia-onyeka.theepicbook
+Pipeline ID: 5
+Run ID: 31
+Branch: refs/heads/drill/pipeline-failure
+Status: completed
+Result: failed
+Completion: 2026-09-23T09:59:43.763010+00:00
+[FAIL] Application completed with failure.
+Sanitized console log saved: //wsl.localhost/Ubuntu/home/anthonia/ansible-onboarding/theepicbook/reports/app-last-run.log
+[PASS] No dependency install failure detected
+[PASS] No build or compile failure detected
+[PASS] No test failure detected
+[PASS] No authentication or permission failure detected
+[PASS] No agent or runner availability issue detected
+[FAIL] Application: Ansible/Nginx/application deployment failure detected.
+Evidence:
+            echo "SAFE FAILURE DRILL: intentional application pipeline failure."
+            echo "This is a temporary pre-deployment validation failure."
+  Result: 'echo "SAFE FAILURE DRILL: intentional application pipeline failure."
+  echo "This is a temporary pre-deployment validation failure."
+  2026-09-23T09:59:29.9345249Z ##[section]Starting: Checkout Tonia-onyeka/theepicbook@drill/pipeline-failure to s
+[FAIL] Application Azure DevOps run result is 'failed'
+
+Summary:
+PASS: 6
+WARN: 0
+FAIL: 3
+Overall Status: FAIL
+Script Exit Code: 2
+Report File: //wsl.localhost/Ubuntu/home/anthonia/ansible-onboarding/theepicbook/reports/pipeline-health-report.txt
+Sanitized Log File: //wsl.localhost/Ubuntu/home/anthonia/ansible-onboarding/theepicbook/reports/app-last-run.log

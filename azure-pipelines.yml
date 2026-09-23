@@ -6,8 +6,6 @@ pool:
 
 steps:
 - script: |
-    echo "SAFE FAILURE DRILL: intentional application pipeline failure."
-    echo "Branch: drill/pipeline-failure"
-    echo "This is a temporary pre-deployment validation failure."
-    exit 1
-  displayName: "SAFE FAILURE DRILL - Intentional Failure"
+    echo "EpicBook Application Pipeline connected successfully."
+    echo "Repository: Tonia-onyeka/theepicbook"
+  displayName: "Verify Application Pipeline"
